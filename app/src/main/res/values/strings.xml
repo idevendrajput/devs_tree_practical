@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">DevsTreePractical</string>
+
+    <string name="maps_api_key">AIzaSyBSNyp6GQnnKlrMr7hD2HGiyF365tFlK5U</string>
+    <string name="no_locations_found">No Locations Found</string>
+    <string name="search">Search</string>
+    <string name="do_you_want_to_save_this_location">Do you want to save this location?</string>
+</resources>
