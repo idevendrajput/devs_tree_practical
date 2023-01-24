@@ -63,6 +63,15 @@ object AppFunctions {
 
     private fun getMyLocation(activity: AppCompatActivity): Location  {
 
+        val myLatLng = getMyLatLng(activity)
+        val myLocation = Location("")
+        myLocation.latitude = myLatLng.latitude
+        myLocation.longitude = myLatLng.longitude
+
+        return myLocation
+    }
+
+    fun getMyLatLng(activity: AppCompatActivity): LatLng {
         val locationManager =
             activity.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val locationProvider = LocationManager.NETWORK_PROVIDER
@@ -72,11 +81,7 @@ object AppFunctions {
         val userLat = lastKnownLocation?.latitude
         val userLong = lastKnownLocation?.longitude
 
-        val myLocation = Location("")
-        myLocation.latitude = userLat ?: .0
-        myLocation.longitude = userLong ?: .0
-
-        return myLocation
+        return LatLng(userLat ?: .0, userLong ?: .0)
     }
 
     fun checkLocationPermissions(activity: AppCompatActivity, isGranted: (isGranted: Boolean) -> Unit) {

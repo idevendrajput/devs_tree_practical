@@ -5,6 +5,7 @@ object AppConst {
     const val MAP_API_KEY = "AIzaSyBSNyp6GQnnKlrMr7hD2HGiyF365tFlK5U"
 
     const val LOCATION_ID = "locationID"
+    const val IS_ROUTE_MODE = "isRouteMode"
 
     // Room Tables
     const val LOCATION_TABLE = "locations"

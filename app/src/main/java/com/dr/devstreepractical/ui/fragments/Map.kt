@@ -1,5 +1,6 @@
 package com.dr.devstreepractical.ui.fragments
 
+import android.graphics.Color
 import android.util.Log
 import android.view.View
 import android.widget.TextView
@@ -13,18 +14,29 @@ import com.dr.devstreepractical.databinding.FragmentMapBinding
 import com.dr.devstreepractical.room.LocationsEntity
 import com.dr.devstreepractical.ui.dialogs.find_places.FindPlaces
 import com.dr.devstreepractical.utils.AppConst
+import com.dr.devstreepractical.utils.AppConst.IS_ROUTE_MODE
+import com.dr.devstreepractical.utils.AppConst.MAP_API_KEY
+import com.dr.devstreepractical.utils.AppFunctions
 import com.dr.devstreepractical.utils.AppFunctions.getDistance
 import com.dr.devstreepractical.utils.AppFunctions.getLatLang
+import com.dr.devstreepractical.utils.AppFunctions.getMyLatLng
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.maps.android.PolyUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+
 
 class Map : BaseFragment<FragmentMapBinding>(), OnMapReadyCallback, GoogleMap.OnMarkerClickListener,
     GoogleMap.OnMarkerDragListener,
@@ -37,12 +49,15 @@ class Map : BaseFragment<FragmentMapBinding>(), OnMapReadyCallback, GoogleMap.On
 
     private var locationId: Long? = null
     private var isEdit: Boolean = false
+    private var isRouteMode: Boolean = false
 
     override fun init() {
 
         val supportMapFragment =
             childFragmentManager.findFragmentByTag("mapFragment") as SupportMapFragment?
         supportMapFragment?.getMapAsync(this)
+
+        isRouteMode = arguments?.getBoolean(IS_ROUTE_MODE, false) ?: false
 
         ifEditMode()
 
@@ -116,26 +131,40 @@ class Map : BaseFragment<FragmentMapBinding>(), OnMapReadyCallback, GoogleMap.On
             this?.setContentDescription("Map with marker.")
         }
 
-        val icon = BitmapDescriptorFactory.fromResource(R.drawable.pin)
-
         if (location != null) {
-            googleMap?.addMarker(
-                MarkerOptions()
-                    .position(LatLng(location!!.lat, location!!.long))
-                    .title(location!!.cityName)
-                    .icon(icon)
-                    .snippet(location!!.address)
-                    .rotation(-25f)
-            )?.showInfoWindow()
-
-            googleMap?.moveCamera(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(location!!.lat, location!!.long),
-                    16f
-                )
-            )
+            addMarker(location!!)
         }
-        
+
+    }
+
+    private fun addMarker(location: LocationsEntity) {
+        googleMap?.addMarker(
+            MarkerOptions()
+                .position(LatLng(location.lat, location.long))
+                .title(location.cityName)
+                .icon(
+                    BitmapDescriptorFactory.fromResource(R.drawable.pin)
+                )
+                .snippet(location.address)
+                .rotation(-25f)
+        )?.showInfoWindow()
+        googleMap?.moveCamera(
+            CameraUpdateFactory.newLatLngZoom(
+                LatLng(location.lat, location.long),
+                if (isRouteMode) 10f else 16f
+            )
+        )
+    }
+
+    private fun addMarkerAtMyLocation() {
+        googleMap?.addMarker(
+            MarkerOptions()
+                .position(getMyLatLng(activity as AppCompatActivity))
+                .icon(
+                    BitmapDescriptorFactory.fromResource(R.drawable.pin)
+                )
+                .rotation(-25f)
+        )
     }
 
     private fun saveLocation() {
@@ -181,10 +210,67 @@ class Map : BaseFragment<FragmentMapBinding>(), OnMapReadyCallback, GoogleMap.On
 
         googleMap?.moveCamera(CameraUpdateFactory.newLatLngBounds(indiaBounds, 0))
 
-        if(isEdit) {
+        if (isEdit) {
             focusOnPlace()
         }
 
+        Log.d(TAG, "onMapReady: $isRouteMode")
+        if (isRouteMode) {
+            createMapRoutes()
+        }
+
+    }
+
+    private fun createMapRoutes() {
+
+        val locations = room?.locationDao()?.getLocationsAsc()
+
+        addMarkerAtMyLocation()
+
+        if (locations != null && locations.isNotEmpty()) {
+            val locationsLatLng = ArrayList<LatLng>()
+            locations.mapIndexed { index, locationsEntity ->
+                locationsLatLng.add(LatLng(locationsEntity.lat, locationsEntity.long))
+                addMarker(locationsEntity)
+                showLoading("Getting directions")
+                getDirections(
+                    if (index == 0) getMyLatLng(activity as AppCompatActivity) else LatLng(
+                        locations[index - 1].lat,
+                        locations[index - 1].long
+                    ), LatLng(locationsEntity.lat, locationsEntity.long)
+                )
+            }
+        }
+    }
+
+    private fun getDirections(origin: LatLng, destination: LatLng) {
+        job.launch {
+            val url =
+                "https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$MAP_API_KEY"
+            val result = withContext(IO) {
+                val myUrl = URL(url)
+                val httpURLConnection = myUrl.openConnection() as HttpURLConnection
+                httpURLConnection.connect()
+                val istm = httpURLConnection.inputStream
+                val bufferedReader = BufferedReader(InputStreamReader(istm))
+                val stringBuilder = StringBuilder()
+                var line: String? = ""
+                while (line != null) {
+                    line = bufferedReader.readLine()
+                    stringBuilder.append(line)
+                }
+                val data = stringBuilder.toString()
+                val jsonObject = JSONObject(data)
+                val jsonObject1 = jsonObject.getJSONArray("routes").getJSONObject(0)
+                val result = jsonObject1.getJSONObject("overview_polyline").getString("points")
+                result
+            }
+            withContext(Main) {
+                val list = PolyUtil.decode(result)
+                googleMap?.addPolyline(PolylineOptions().addAll(list).color(Color.RED).width(10f))
+                dismissLoading()
+            }
+        }
     }
 
     override fun onMarkerClick(p0: Marker?): Boolean {

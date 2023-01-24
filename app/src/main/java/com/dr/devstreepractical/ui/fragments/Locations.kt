@@ -12,6 +12,7 @@ import com.dr.devstreepractical.base.BaseFragment
 import com.dr.devstreepractical.databinding.FragmentLocationsBinding
 import com.dr.devstreepractical.ui.adapters.AdapterLocations
 import com.dr.devstreepractical.utils.AppConst
+import com.dr.devstreepractical.utils.AppConst.IS_ROUTE_MODE
 import com.dr.devstreepractical.utils.AppFunctions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
@@ -99,7 +100,7 @@ class Locations : BaseFragment<FragmentLocationsBinding>() {
         }
 
         binding.tb.setNavigationOnClickListener {
-            findNavController().navigate(R.id.action_locations_to_map)
+            findNavController().navigate(R.id.action_locations_to_map, Bundle().apply { putBoolean(IS_ROUTE_MODE, true) })
         }
 
         binding.tb.menu[0].setOnMenuItemClickListener {
